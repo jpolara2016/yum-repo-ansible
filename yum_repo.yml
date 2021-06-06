@@ -1,0 +1,95 @@
+---
+- hosts: yum-server
+  user: ec2-user
+  become: yes
+  tasks:
+
+   - name: install required packages
+     yum:
+        name: 
+          - createrepo
+          - httpd
+        state: present
+
+   - name: Creates directory
+     ansible.builtin.file:
+      path: /mnt/localrepo
+      state: directory
+
+   - name: Download packages but do not install it #You can also copy packages from ISO file
+     yum:
+       name:
+         - tree
+         - zip
+       state: latest
+       download_only: true
+       download_dir: /mnt/localrepo
+
+   - name: Create localrepo.repo
+     shell: |
+      cat << EOF > /etc/yum.repos.d/localrepo.repo
+      [localrepo]
+      name=Localrepo Repository
+      baseurl=file:///mnt/localrepo
+      gpgcheck=0
+      enabled=1
+      EOF
+
+   - name: execute createrepo
+     shell: |    
+      createrepo -v /mnt/localrepo
+      yum clean all
+      yum repolist
+      yum update -y
+
+   - name: disable SELinux
+     command: setenforce 0
+     ignore_errors: yes
+
+   - name: disable SELinux on reboot
+     selinux:
+       state: disabled
+     ignore_errors: yes
+
+   - name: Copy httpd_conf.py on YUM repo server
+     ansible.builtin.copy: 
+      src: httpd_conf.py
+      dest: ~/
+      mode: 0777
+
+   - name: Run httpd_conf.py using an executable in a system path
+     ansible.builtin.script: httpd_conf.py
+     args:
+      executable: python
+
+   - name: Remove welcome page
+     ansible.builtin.file:
+      path: /etc/httpd/conf.d/welcome.conf
+      state: absent
+
+   - name: Restart httpd
+     service:
+       name: httpd
+       state: restarted
+       enabled: yes
+         
+###############################
+###############################
+
+- hosts: yum-client
+  user: ec2-user
+  become: yes
+  tasks:
+
+   - name: Create localrepo.repo on client machine
+     shell: |
+      cat << EOF > /etc/yum.repos.d/localrepo.repo
+      [localrepo]
+      name=Unixmen Repository
+      baseurl=http://18.234.132.162
+      gpgcheck=0
+      enabled=1
+      EOF
+
+   - name: Clean the repo
+     command: yum clean all
