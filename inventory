@@ -1,0 +1,8 @@
+[yum-server]
+18.234.132.162
+
+[yum-client]
+3.94.119.0
+
+[local]
+localhost ansible_python_interpreter=/usr/local/bin/python3
